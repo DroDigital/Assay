@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: python -m pip install -e ".[dev]"
+      - name: Lint
+        run: |
+          ruff check .
+          ruff format --check .
+      - name: Type check
+        run: mypy
+      - name: Test
+        run: python -m pytest --cov --cov-report=term-missing
+
+  contracts:
+    name: Behavioural contracts (dogfooding)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -e .
+      - name: Healthy demo models must satisfy their contracts
+        run: |
+          mkdir -p reports
+          for demo in lending support assistant; do
+            assay run "src/assay/demos/$demo/assay.toml" \
+              --out-junit "reports/$demo.xml" --out-html "reports/$demo.html" --github-summary
+          done
+      - name: Regressed demo models must be caught
+        run: |
+          for demo in lending support assistant; do
+            if assay run "src/assay/demos/$demo/assay.toml" \
+                --target "assay.demos.$demo:regressed" --out-json "reports/$demo-regressed.json" > /dev/null; then
+              echo "::error::regression in the $demo demo was not detected"
+              exit 1
+            fi
+          done
+      - name: Regression gate trips on a worse model
+        run: |
+          assay run src/assay/demos/lending/assay.toml --out-json reports/baseline.json > /dev/null
+          if assay diff reports/baseline.json reports/lending-regressed.json; then
+            echo "::error::assay diff did not flag the regression"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: assay-reports
+          path: reports/
+
+  build:
+    name: Build and install the wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: |
+          python -m pip install build
+          python -m build
+      - name: Smoke-test the wheel in a clean environment
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install dist/*.whl
+          "$RUNNER_TEMP/venv/bin/assay" demo lending --variant good
