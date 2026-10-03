@@ -342,7 +342,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     _tolerate_narrow_encodings()
     args = _parser().parse_args(argv)
     try:
-        return int(args.handler(args))
+        code = int(args.handler(args))
+        sys.stdout.flush()  # with block buffering a closed pipe only shows up here, not in print()
+        return code
     except AssayError as exc:
         print(f"assay: error: {exc}", file=sys.stderr)
         return 2

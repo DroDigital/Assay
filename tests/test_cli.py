@@ -176,11 +176,19 @@ def test_init_scaffolds_a_project_that_runs(capsys, tmp_path, monkeypatch):
     assert code == 2 and "refusing to overwrite" in err
 
 
-def test_a_closed_stdout_pipe_exits_quietly():
-    """`assay list | head` must not print a traceback (checked in a real subprocess)."""
+@pytest.mark.parametrize("unbuffered", [True, False], ids=["unbuffered", "block-buffered"])
+def test_a_closed_stdout_pipe_exits_quietly(unbuffered):
+    """`assay list | head` must not print a traceback or exit 120 (checked in a real subprocess).
+
+    With block buffering the broken pipe only surfaces when stdout is flushed, which used to
+    happen after main() had returned; the test covers both buffering modes explicitly.
+    """
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONUNBUFFERED"}
+    if unbuffered:
+        env["PYTHONUNBUFFERED"] = "1"
     command = [sys.executable, "-m", "assay", "list"]
     with subprocess.Popen(
-        command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+        command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
     ) as proc:
         assert proc.stdout is not None and proc.stderr is not None
         proc.stdout.close()  # the reader is gone before the child writes anything
