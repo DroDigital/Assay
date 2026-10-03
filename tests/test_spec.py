@@ -350,7 +350,10 @@ def test_more_malformed_specs():
 @pytest.mark.parametrize(
     ("contract", "fragment"),
     [
-        ({"type": "property", "check": {"kind": "matches", "pattern": "("}}, "error"),
+        (
+            {"type": "property", "check": {"kind": "matches", "pattern": "("}},
+            "unterminated subpattern",
+        ),
         ({"type": "monotonicity", "field": "x", "steps": 0.5}, "steps must be a list of numbers"),
         ({"type": "property", "check": {"kind": "probability"}, "tolerance": "5%"}, "TypeError"),
         ({"type": "latency", "budget_ms": "fast"}, "contract #1"),
