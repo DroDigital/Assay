@@ -273,7 +273,7 @@ def test_results_serialise_to_strict_json_even_for_awkward_outputs():
     assert len(example["output"]["long"]) < 400 and example["output"]["items"][-1].startswith("…")
 
 
-def test_redaction_hides_data_but_keeps_assay_authored_text():
+def test_redaction_hides_data_but_keeps_fixed_assay_text():
     def model(x):
         return {"text": f"contact {x}@example.com"}
 
@@ -285,8 +285,11 @@ def test_redaction_hides_data_but_keeps_assay_authored_text():
     blob = json.dumps(result.to_dict())
     assert "alice" not in blob and "secret-suffix" not in blob and "example.com" not in blob
     pii = result.contracts[0].counterexamples[0]
-    assert pii["reason"].startswith("possible PII") and pii["input"] == "<redacted str, 5 chars>"
-    assert result.contracts[1].counterexamples[0]["case"] == "0"
+    assert pii["reason"] == "<redacted>" and pii["input"] == "<redacted str, 5 chars>"
+    inv = result.contracts[1].counterexamples[0]
+    assert (
+        inv["case"] == "0" and inv["reason"] == "output changed under the transform"
+    )  # fixed text
 
 
 def test_redaction_strips_model_error_text():
@@ -341,3 +344,27 @@ def test_an_aborting_error_cancels_queued_work_instead_of_running_it_all():
         )
     time.sleep(0.2)
     assert len(started) < 50  # without cancellation all 200 queued trials would run
+
+
+def test_redaction_also_hides_reasons_that_quote_the_data():
+    secret = "secret-ssn-123"
+    suite = Suite("t", lambda x: {"label": secret, "n": 12345}, ["a"], redact=True).add(
+        Property("one-of", check=checks.one_of("x", "y"), output="label"),
+        Property("range", check=checks.in_range(0, 10), output="n"),
+        Property("path", check=lambda y: True, output="missing"),
+        Property("keys", check=lambda y: True, output=f"label.{secret}"),
+    )
+    blob = json.dumps(suite.run().to_dict())
+    assert (
+        secret not in blob
+        and "12345" not in blob
+        and '"label"' not in blob.split("counterexamples")[1]
+    )
+
+
+def test_automatic_case_ids_never_collide_with_explicit_ones():
+    suite = Suite("t", lambda x: x, [Case("a", id="1"), "b", "c", Case("d", id="case-2")])
+    ids = [c.id for c in suite.cases]
+    assert ids[0] == "1" and ids[3] == "case-2" and len(set(ids)) == 4
+    with pytest.raises(SpecError, match="duplicate case id 'x'"):
+        Suite("t", lambda x: x, [Case("a", id="x"), Case("b", id="x")])

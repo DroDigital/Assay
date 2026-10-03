@@ -63,7 +63,7 @@ def _write(path: str, text: str) -> None:
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
-    spec = load_spec(args.spec)
+    spec = load_spec(args.spec, load_model=not args.target)
     model = None
     if args.target:
         base = spec.path.parent.resolve() if spec.path else Path.cwd()
@@ -105,7 +105,9 @@ def _cmd_demo(args: argparse.Namespace) -> int:
         raise SpecError(f"unknown demo '{args.name}' (choose {', '.join(DEMOS)})")
     for name in [args.name] if args.name else list(DEMOS):
         demo = DEMOS[name]
-        suite = load_spec(demo.spec).to_suite(model=import_target(demo.target(args.variant)))
+        suite = load_spec(demo.spec, load_model=False).to_suite(
+            model=import_target(demo.target(args.variant))
+        )
         print(f"━━ {name} · {demo.industry} · {demo.summary}")
         print(f"   model under test: {demo.target(args.variant)}\n")
         sys.stdout.write(render_text(suite.run(), color=_color(args), examples=args.examples))

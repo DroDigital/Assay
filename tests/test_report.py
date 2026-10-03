@@ -201,3 +201,34 @@ def test_redacted_and_empty_results_still_render_sensibly():
     assert "changed fields: g" in text and "<redacted" in text and '"F"' not in text
     nothing = Suite("t", lambda x: x, [{"a": 1}]).add(Golden("g")).run()
     assert "no applicable trials" in evidence(nothing.contracts[0])
+
+
+def test_model_controlled_keys_and_field_names_cannot_inject_terminal_escapes():
+    hostile_key = "\x1b[2Jevil\nPASS fake-line"
+    broken = (
+        Suite("t", lambda x: {hostile_key: 1}, ["a"])
+        .add(Property("p", check=lambda y: True, output="label"))
+        .run()
+    )
+    row = {"a\x1b[31mred": 1, "g": "F"}
+    swapped = (
+        Suite("t", lambda r: r["g"], [row])
+        .add(
+            Invariance(
+                "inv",
+                transform=T.set_field("a\x1b[31mred", 2),
+                tolerance=0.0,
+                compare=lambda a, b: False,
+            )
+        )
+        .run()
+    )
+    for result in (broken, swapped):
+        for rendered in (
+            render_text(result),
+            render_markdown(result),
+            render_junit(result),
+            render_html(result),
+        ):
+            assert "\x1b" not in rendered and "\nPASS fake-line" not in rendered
+    assert "\\u001b[2Jevil\\u000aPASS fake-line" in render_text(broken)

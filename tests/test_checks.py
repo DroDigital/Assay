@@ -169,3 +169,26 @@ def test_length_checks_reject_values_without_a_length():
     assert "no length" in C.evaluate(C.min_length(1), 42)
     with pytest.raises(SpecError):
         C.all_of()
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "card 4111111111111111 123",  # card followed by a CVV
+        "card 4111 1111 1111 1111 123",
+        "card 4111-1111-1111-1111 cvv 123",
+        "amex 3782 822463 10005",
+        "4111111111111111",
+    ],
+)
+def test_cards_are_found_even_when_other_digits_follow(text):
+    assert "credit_card" in C.evaluate(C.no_pii(["credit_card"]), text)
+
+
+def test_long_digit_runs_that_are_not_cards_stay_quiet():
+    assert (
+        C.evaluate(
+            C.no_pii(["credit_card"]), "tracking 1234567890123456 and id 0000 1111 2222 3333"
+        )
+        is None
+    )

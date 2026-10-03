@@ -41,11 +41,13 @@ def jsonable(value: Any, _depth: int = 0) -> Any:
     return text if len(text) <= _MAX_STR else text[:_MAX_STR] + "…"
 
 
-def redact(detail: Mapping[str, Any]) -> dict[str, Any]:
+def redact(detail: Mapping[str, Any], *, keep_reason: bool = False) -> dict[str, Any]:
     """Replace data-bearing fields of a counterexample with a shape-only placeholder.
 
-    Reasons and timings stay (they are written by assay, not copied from your data); model
-    errors keep only their exception type. Use for regulated data and shared CI logs.
+    Case ids and timings stay. A ``reason`` is kept only when the contract says it is fixed
+    assay text (``keep_reason``): reasons produced by checks, output-path errors and model errors
+    can quote the data (a value out of range, the output's keys, an exception message), so they
+    are replaced. Use for regulated data and shared CI logs.
     """
 
     def placeholder(value: Any) -> str:
@@ -59,9 +61,12 @@ def redact(detail: Mapping[str, Any]) -> dict[str, Any]:
             out[key] = value
         elif key == "reason":
             text = str(value)
-            out[key] = (
-                text.split(":", 1)[0] + ": <redacted>" if text.startswith("model error") else text
-            )
+            if keep_reason:
+                out[key] = text
+            else:
+                out[key] = (
+                    "model error: <redacted>" if text.startswith("model error") else "<redacted>"
+                )
         elif key == "changed" and isinstance(value, Mapping):
             out[key] = sorted(value)
         else:

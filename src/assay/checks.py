@@ -248,8 +248,12 @@ def _luhn_ok(digits: str) -> bool:
 
 
 def _is_card(candidate: str) -> bool:
-    digits = re.sub(r"[ -]", "", candidate)
-    return 13 <= len(digits) <= 19 and digits.isdigit() and _luhn_ok(digits)
+    """Luhn-valid and 13-19 digits, also when a trailing group is something else (a CVV)."""
+    groups = re.split(r"[ -]", candidate)
+    attempts = ["".join(groups)]
+    if len(groups) > 1:
+        attempts.append("".join(groups[:-1]))  # "4111 1111 1111 1111 123": drop the CVV
+    return any(13 <= len(d) <= 19 and _luhn_ok(d) for d in attempts)
 
 
 def _is_iban(candidate: str) -> bool:
@@ -280,7 +284,14 @@ _PII: dict[str, tuple[re.Pattern[str], Callable[[str], bool]]] = {
         re.compile(r"(?<![\d-])(?!000|666|9\d\d)\d{3}-(?!00)\d{2}-(?!0000)\d{4}(?![\d-])"),
         _always,
     ),
-    "credit_card": (re.compile(r"(?<!\d)\d(?:[ -]?\d){12,18}(?!\d)"), _is_card),
+    "credit_card": (
+        re.compile(
+            r"(?<!\d)(?:\d{13,19}"  # 4111111111111111
+            r"|\d{4}(?:[ -]\d{4}){2,3}(?:[ -]\d{1,4})?"  # 4111 1111 1111 1111 (+ group)
+            r"|\d{4}[ -]\d{6}[ -]\d{5})(?!\d)"  # 3782 822463 10005 (Amex layout)
+        ),
+        _is_card,
+    ),
     "iban": (re.compile(r"\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,3})?\b"), _is_iban),
 }
 

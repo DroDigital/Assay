@@ -19,14 +19,20 @@ ON_ERROR = ("violation", "skip", "raise")
 
 def as_cases(items: Iterable[Any]) -> list[Case]:
     """Normalise raw inputs and :class:`Case` objects, giving every case a unique id."""
+    wrapped = [item if isinstance(item, Case) else Case(input=item) for item in items]
+    explicit = [case.id for case in wrapped if case.id]
+    duplicate = next((i for i in explicit if explicit.count(i) > 1), None)
+    if duplicate is not None:
+        raise SpecError(f"duplicate case id '{duplicate}'")
+    taken = set(explicit)
     cases: list[Case] = []
-    seen: set[str] = set()
-    for index, item in enumerate(items):
-        case = item if isinstance(item, Case) else Case(input=item)
-        case_id = case.id or str(index)
-        if case_id in seen:
-            raise SpecError(f"duplicate case id '{case_id}'")
-        seen.add(case_id)
+    for index, case in enumerate(wrapped):
+        case_id = case.id
+        if not case_id:  # position by default, but never collide with an explicit id
+            case_id = str(index)
+            while case_id in taken:
+                case_id = f"case-{case_id}"
+            taken.add(case_id)
         cases.append(Case(input=case.input, id=case_id, expected=case.expected))
     return cases
 
@@ -162,7 +168,7 @@ class Suite:
 
     def _example(self, trial: Trial, outcome: Outcome) -> dict[str, Any]:
         detail = {"case": trial.case_id, "input": trial.input, **outcome.detail}
-        shaped = redact(detail) if self.redact else detail
+        shaped = redact(detail, keep_reason=outcome.safe_reason) if self.redact else detail
         return {key: jsonable(value) for key, value in shaped.items() if value is not MISSING}
 
     def run(self) -> SuiteResult:

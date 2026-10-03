@@ -437,3 +437,17 @@ def test_ordinary_checks_still_show_the_output():
     assert result.contracts[0].counterexamples[0]["output"] == "visible output"
     assert checks.is_sensitive(checks.no_pii()) and not checks.is_sensitive(checks.probability())
     assert not checks.is_sensitive(checks.all_of(checks.probability()))
+
+
+def test_relative_monotonicity_raises_negative_fields_instead_of_lowering_them():
+    seen = []
+
+    def model(row):
+        seen.append(row["x"])
+        return {"s": row["x"]}  # genuinely increasing in x
+
+    result = run(
+        Monotonicity("m", "x", output="s", steps=(0.1, 0.5)), model, [{"x": -100}, {"x": 100}]
+    )
+    assert result.violations == 0
+    assert sorted(set(seen)) == [-100, -90.0, -50.0, 100, 110.0, 150.0]

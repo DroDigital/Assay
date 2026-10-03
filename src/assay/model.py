@@ -136,6 +136,14 @@ def expand_env(text: str) -> str:
     return _ENV.sub(lookup, text)
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never follow redirects: urllib would re-send the headers (API tokens) to the new host,
+    and re-POST the body on 307/308."""
+
+    def redirect_request(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+
 _RETRYABLE = {408, 425, 429, 500, 502, 503, 504}
 _LOOPBACK = {"localhost", "127.0.0.1", "::1"}
 
@@ -156,18 +164,18 @@ def http_model(
 
     ``input_key`` wraps the input as ``{input_key: input}``; ``output_path`` selects a field of
     the response. Rate limits and transient 5xx errors are retried with exponential backoff.
-    Only ``http`` and ``https`` URLs are accepted (no ``file://``), and responses larger than
-    ``max_bytes`` are rejected rather than held in memory.
+    Only ``http`` and ``https`` URLs are accepted (no ``file://``), redirects are never followed
+    (so ``headers`` cannot leak to another host), and responses larger than ``max_bytes`` are
+    rejected rather than held in memory.
     """
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         raise SpecError(f"model url must be an absolute http(s) URL, got '{url}'")
     resolved = {key: expand_env(value) for key, value in (headers or {}).items()}
-    opener = (
-        urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        if parsed.hostname in _LOOPBACK
-        else urllib.request.build_opener()
-    )
+    handlers: list[Any] = [_NoRedirect]
+    if parsed.hostname in _LOOPBACK:
+        handlers.append(urllib.request.ProxyHandler({}))  # never proxy local test servers
+    opener = urllib.request.build_opener(*handlers)
 
     def call(value: Any) -> Any:
         body = json.dumps(value if input_key is None else {input_key: value}).encode()
@@ -189,6 +197,11 @@ def http_model(
                 if exc.code in _RETRYABLE and attempt < retries:
                     sleep(backoff * 2**attempt)
                     continue
+                if 300 <= exc.code < 400:
+                    raise ModelError(
+                        f"HTTP {exc.code} redirect from {url}: redirects are not followed so "
+                        "credentials are never forwarded; use the final URL"
+                    ) from exc
                 raise ModelError(f"HTTP {exc.code} from {url}") from exc
             except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
                 if attempt < retries:

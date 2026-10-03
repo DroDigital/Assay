@@ -98,7 +98,7 @@ def test_expand_env(monkeypatch):
 class _Service:
     """A scripted local HTTP server: replies with the next status from `script`."""
 
-    def __init__(self, script, body=None):
+    def __init__(self, script, body=None, location=None):
         self.script, self.requests = list(script), []
         service = self
 
@@ -111,6 +111,8 @@ class _Service:
                     body if body is not None else json.dumps({"result": {"text": "hello", "n": 3}})
                 )
                 self.send_response(status)
+                if location:
+                    self.send_header("Location", location)
                 self.send_header("Content-Length", str(len(raw)))
                 self.end_headers()
                 self.wfile.write(raw.encode())
@@ -133,8 +135,8 @@ class _Service:
 def service():
     made = []
 
-    def make(script=(), body=None):
-        made.append(_Service(script, body))
+    def make(script=(), body=None, location=None):
+        made.append(_Service(script, body, location))
         return made[-1]
 
     yield make
@@ -243,3 +245,18 @@ def test_http_responses_larger_than_the_cap_are_rejected(service):
     with pytest.raises(ModelError, match="exceeds 100 bytes"):
         http_model(svc.url, max_bytes=100)("hi")
     assert http_model(svc.url, max_bytes=500)("hi") == "x" * 500
+
+
+def test_redirects_are_never_followed_so_credentials_cannot_leak(service, monkeypatch):
+    monkeypatch.setenv("ASSAY_TOKEN", "s3cret")
+    elsewhere = service()  # a different host that must never see the request
+    origin = service([307], location=elsewhere.url)
+    call = http_model(
+        origin.url,
+        headers={"Authorization": "Bearer ${ASSAY_TOKEN}"},
+        retries=3,
+        sleep=lambda s: None,
+    )
+    with pytest.raises(ModelError, match="HTTP 307 redirect.*never forwarded"):
+        call("x")
+    assert len(origin.requests) == 1 and elsewhere.requests == []

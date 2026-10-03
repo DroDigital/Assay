@@ -120,7 +120,7 @@ print(result)
 ```text
  PASS         valid-score         0/16 violations · true rate ≤ 19.4% (95% conf.) · tolerance 0%
  FAIL         income-never-hurts  12/32 violations · 37.5% (CI 22.9%–54.7%) · tolerance 0%
-               case 8: raising 'income' moved the output the wrong way (0.8 -> 0.73; expected increasing)
+               case 8: raising 'income' moved the output the wrong way (expected increasing)
                  changed income: 120000 → 156000.0
  FAIL         gender-blind        16/16 violations · 100% (CI 80.6%–100%) · tolerance 0%
                case 0: output changed under the transform

@@ -4,15 +4,15 @@ install:
 	python -m pip install -e ".[dev]"
 
 lint:
-	ruff check .
-	ruff format --check .
+	python -m ruff check .
+	python -m ruff format --check .
 
 format:
-	ruff format .
-	ruff check --fix .
+	python -m ruff format .
+	python -m ruff check --fix .
 
 typecheck:
-	mypy
+	python -m mypy
 
 test:
 	python -m pytest --cov

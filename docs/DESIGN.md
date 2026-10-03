@@ -129,13 +129,17 @@ test must never be quietly scored against the model.
 
 * A spec file is configuration, but `type = "python"` imports code. Treat specs like scripts.
 * HTTP models accept only `http(s)` URLs (no `file://`), send secrets via `${ENV_VAR}` expansion
-  (a missing variable is an error, never sent literally), and never inherit a proxy for loopback.
+  (a missing variable is an error, never sent literally), never follow redirects (so headers cannot
+  be forwarded to another host), cap the response size, and never use a proxy for loopback.
 * Command models are executed from an argument list, never through a shell.
-* Model output is untrusted. Every value is rendered via `json.dumps` (escaping control and
-  terminal-escape characters) so output cannot spoof verdict lines or recolour the terminal. Markdown
+* Model output is untrusted. Every value is rendered via `json.dumps`, and every reason or field
+  name that may quote it has control characters escaped, so output cannot spoof verdict lines or
+  recolour the terminal. Markdown
   code fences cannot be broken out of, HTML is escaped, and JUnit strips characters XML cannot carry.
 * Sensitive-data checks report masked excerpts and **withhold the offending output** from every
-  report. `redact = true` goes further and replaces all counterexample data with placeholders.
+  report. `redact = true` goes further and replaces all counterexample data, and any reason that
+  could quote it (a value out of range, the output's keys), with placeholders; only fixed assay
+  text such as "output changed under the transform" is kept.
 
 ## 8. Alternatives considered
 

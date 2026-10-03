@@ -54,6 +54,8 @@ class Outcome:
     metrics: Mapping[str, float] = dc.field(default_factory=dict)
     skipped: bool = False
     error: bool = False
+    #: The reason is fixed assay text (no model data), so ``redact`` may keep it.
+    safe_reason: bool = False
 
 
 @dataclass(frozen=True)
@@ -224,7 +226,7 @@ class Invariance(Contract):
             "output changed under the transform" if self.expect_equal
             else "output did not change under the transform"
         )  # fmt: skip
-        return Outcome(False, detail)
+        return Outcome(False, detail, safe_reason=True)
 
 
 @dataclass
@@ -269,7 +271,7 @@ class Monotonicity(Contract):
                 skipped += len(self.steps)
                 continue
             for step in self.steps:
-                raised = value * (1 + step) if self.mode == "relative" else value + step
+                raised = value + abs(value) * step if self.mode == "relative" else value + step
                 if raised == value:
                     skipped += 1
                     continue
@@ -297,9 +299,10 @@ class Monotonicity(Contract):
                 "after": after,
                 "reason": (
                     f"raising '{self.field}' moved the output the wrong way "
-                    f"({before:g} -> {after:g}; expected {self.direction})"
+                    f"(expected {self.direction})"
                 ),
             },
+            safe_reason=True,
         )
 
 
@@ -373,6 +376,7 @@ class Golden(Contract):
             False,
             {"input": case.input, "expected": case.expected, "actual": actual,
              "reason": "output differs from the expected value"},
+            safe_reason=True,
         )  # fmt: skip
 
 
@@ -403,6 +407,7 @@ class Agreement(Contract):
             False,
             {"input": value, "candidate": candidate, "reference": reference,
              "reason": "candidate and reference disagree"},
+            safe_reason=True,
         )  # fmt: skip
 
 
@@ -439,6 +444,7 @@ class Consistency(Contract):
             False,
             {"input": value, "outputs": distinct,
              "reason": f"{len(distinct)} different outputs in {self.repeats} identical calls"},
+            safe_reason=True,
         )  # fmt: skip
 
 
@@ -480,6 +486,7 @@ class Latency(Contract):
             {"input": value, "ms": round(millis, 1),
              "reason": f"took {millis:.0f} ms, budget {self.budget_ms:g} ms"},
             metrics,
+            safe_reason=True,
         )  # fmt: skip
 
     def summarize(self, outcomes: Sequence[Outcome]) -> dict[str, float]:

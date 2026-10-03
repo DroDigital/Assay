@@ -25,7 +25,7 @@ directory.
 | `workers` | `1` | concurrent model calls (latency contracts always run serially) |
 | `on_error` | `"violation"` | how a crashing or unreachable model is scored: `violation`, `skip` or `raise` |
 | `max_examples` | `3` | counterexamples kept per contract |
-| `redact` | `false` | replace inputs and outputs in counterexamples with placeholders |
+| `redact` | `false` | replace inputs, outputs and any reason that could quote them with placeholders |
 | `cases_file` | none | `.jsonl` (one `{"input": ..., "expected": ..., "id": ...}` per line) or a `.json` list |
 
 ### `[model]`
@@ -33,7 +33,7 @@ directory.
 | `type` | Keys | Notes |
 |---|---|---|
 | `python` | `target = "package.module:function"` | the module is imported, so a spec is as trusted as code |
-| `http` | `url`, `input_key`, `output_path`, `headers`, `timeout` (30), `retries` (2), `backoff` (0.5) | POSTs JSON; 408/425/429/5xx are retried with exponential backoff; only `http(s)` URLs; `${ENV_VAR}` in headers, a missing variable is an error |
+| `http` | `url`, `input_key`, `output_path`, `headers`, `timeout` (30), `retries` (2), `backoff` (0.5) | POSTs JSON; 408/425/429/5xx are retried with exponential backoff; only `http(s)` URLs; redirects are refused (headers are never forwarded to another host); responses over `max_bytes` (10 MB) are rejected; `${ENV_VAR}` in headers, a missing variable is an error |
 | `command` | `command = ["program", "arg"]`, `timeout` (30) | JSON on stdin, JSON or text on stdout; run directly, never through a shell |
 
 All types accept `cache = true` (per-run, in memory) so a baseline `f(x)` shared by several
@@ -142,17 +142,39 @@ version regress?" when combined with `--out-json` and `assay diff`.
 ## Python API
 
 ```python
-from assay import (Suite, Case, Invariance, Sensitivity, Monotonicity, Property, Golden,
-                   Agreement, Consistency, Latency, checks, transforms, Verdict)
+from assay import (
+    Suite,
+    Case,
+    Invariance,
+    Sensitivity,
+    Monotonicity,
+    Property,
+    Golden,
+    Agreement,
+    Consistency,
+    Latency,
+    checks,
+    transforms,
+    Verdict,
+)
 
-suite = Suite(name, model, cases, seed=0, confidence=0.95, workers=1,
-              on_error="violation", max_examples=3, redact=False).add(contract, ...)
-result = suite.run()                  # SuiteResult
-result.ok(strict=False)               # bool
-result.exit_code(strict=False)        # 0 / 1 / 3
-result.assert_ok()                    # raises AssertionError carrying the text report
-result.to_dict()                      # JSON-ready, schema "assay.result/v1"
-print(result)                         # the text report
+suite = Suite(
+    name,
+    model,
+    cases,
+    seed=0,
+    confidence=0.95,
+    workers=1,
+    on_error="violation",
+    max_examples=3,
+    redact=False,
+).add(contract, ...)
+result = suite.run()  # SuiteResult
+result.ok(strict=False)  # bool
+result.exit_code(strict=False)  # 0 / 1 / 3
+result.assert_ok()  # raises AssertionError carrying the text report
+result.to_dict()  # JSON-ready, schema "assay.result/v1"
+print(result)  # the text report
 ```
 
 Contracts are keyword-friendly dataclasses: `Invariance("name", transform=..., variants=3,

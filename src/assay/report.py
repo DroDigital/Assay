@@ -41,6 +41,18 @@ def short(value: Any, width: int = 96) -> str:
     return text if len(text) <= width else text[: width - 1] + "…"
 
 
+_UNSAFE = re.compile("[\x00-\x1f\x7f-\x9f\u2028\u2029\u202a-\u202e\u2066-\u2069]")
+
+
+def safe(text: str) -> str:
+    """Escape control characters (including newlines and bidi overrides) as ``\\uXXXX``.
+
+    Reasons and field names can quote model output, e.g. an ``output`` path error lists the keys
+    of whatever the model returned, so they get the same treatment as dumped values.
+    """
+    return _UNSAFE.sub(lambda match: f"\\u{ord(match.group(0)):04x}", text)
+
+
 def evidence(c: ContractResult) -> str:
     """One sentence describing what the trials showed."""
     if c.trials == 0:
@@ -52,13 +64,17 @@ def evidence(c: ContractResult) -> str:
 
 
 def _example_lines(example: Mapping[str, Any]) -> list[str]:
-    lines = [f"case {example.get('case')}: {example.get('reason', 'violation')}"]
+    lines = [
+        f"case {safe(str(example.get('case')))}: {safe(str(example.get('reason', 'violation')))}"
+    ]
     changed = example.get("changed")
     if isinstance(changed, Mapping):
         for name, pair in changed.items():
-            lines.append(f"  changed {name}: {short(pair[0], 40)} → {short(pair[1], 40)}")
+            lines.append(
+                f"  changed {safe(str(name))}: {short(pair[0], 40)} → {short(pair[1], 40)}"
+            )
     elif isinstance(changed, list):
-        lines.append(f"  changed fields: {', '.join(map(str, changed))}")
+        lines.append(f"  changed fields: {safe(', '.join(map(str, changed)))}")
     for key, value in example.items():
         if key in _HIDDEN or key == "changed" or (key == "variant" and changed):
             continue

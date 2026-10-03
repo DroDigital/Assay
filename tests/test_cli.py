@@ -224,3 +224,36 @@ def test_reports_do_not_crash_on_consoles_that_cannot_encode_them(monkeypatch):
     assert main(["run", LENDING, "--no-color"]) == 0
     text = raw.getvalue().decode("ascii")
     assert "lending-model" in text and "PASS" in text and "?" in text  # "≤" etc. became "?"
+
+
+def test_target_override_never_resolves_the_specs_own_model(capsys, tmp_path):
+    """The spec's http model needs an env var that is not set; --target must not care."""
+    spec = tmp_path / "s.toml"
+    spec.write_text(
+        '[model]\ntype = "http"\nurl = "http://127.0.0.1:1/x"\nheaders = { Authorization = "Bearer ${ASSAY_NOT_SET_XYZ}" }\n'
+        '[[case]]\ninput = 4.0\n[[contract]]\ntype = "property"\nname = "p"\ncheck = { kind = "finite" }\n'
+    )
+    assert run(capsys, "run", str(spec))[0] == 2  # without the override it fails loudly
+    code, out, _ = run(capsys, "run", str(spec), "--target", "math:sqrt")
+    assert code == 0 and "PASS" in out
+
+
+def test_target_override_still_resolves_agreement_references(capsys, tmp_path):
+    spec = tmp_path / "s.toml"
+    spec.write_text(
+        '[model]\ntype = "python"\ntarget = "does.not.exist:f"\n[[case]]\ninput = 4.0\n'
+        '[[contract]]\ntype = "agreement"\nname = "a"\nreference = { type = "python", target = "math:sqrt" }\n'
+    )
+    code, out, _ = run(capsys, "run", str(spec), "--target", "math:sqrt")
+    assert code == 0 and "PASS" in out
+
+
+@pytest.mark.parametrize("suite_line", ['seed = "abc"', "workers = 2.5", 'redact = "yes"'])
+def test_malformed_suite_settings_exit_2_not_1(capsys, tmp_path, suite_line):
+    spec = tmp_path / "s.toml"
+    spec.write_text(
+        f'[suite]\n{suite_line}\n[model]\ntype = "python"\ntarget = "math:sqrt"\n[[case]]\ninput = 1\n'
+        '[[contract]]\ntype = "property"\ncheck = { kind = "finite" }\n'
+    )
+    code, _, err = run(capsys, "run", str(spec))
+    assert code == 2 and "[suite]" in err
