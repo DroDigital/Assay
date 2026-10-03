@@ -1,0 +1,69 @@
+# Behavioural contracts for a credit-scoring model.
+# Run:  assay run src/assay/demos/lending/assay.toml
+#       assay run src/assay/demos/lending/assay.toml --target assay.demos.lending:regressed
+
+[suite]
+name = "lending-model"
+seed = 7
+cases_file = "cases.jsonl"
+
+[model]
+type = "python"
+target = "assay.demos.lending:good"
+
+# --- Sanity ---------------------------------------------------------------
+[[contract]]
+type = "property"
+name = "score-is-a-probability"
+output = "score"
+check = { kind = "probability" }
+
+# --- Domain knowledge: more income / less debt / fewer missed payments never hurts ---
+[[contract]]
+type = "monotonicity"
+name = "more-income-never-hurts"
+field = "income"
+direction = "increasing"
+output = "score"
+steps = [0.05, 0.25, 0.75]
+
+[[contract]]
+type = "monotonicity"
+name = "more-debt-never-helps"
+field = "debt_ratio"
+direction = "decreasing"
+output = "score"
+mode = "absolute"
+steps = [0.02, 0.1]
+
+[[contract]]
+type = "monotonicity"
+name = "missed-payments-never-help"
+field = "missed_payments"
+direction = "decreasing"
+output = "score"
+mode = "absolute"
+steps = [1, 2]
+
+# --- Counterfactual fairness: flipping a protected attribute must change nothing ---
+[[contract]]
+type = "invariance"
+name = "gender-blind-score"
+output = "score"
+abs_tol = 0.005
+transform = { kind = "swap_field", field = "gender", mapping = { F = "M", M = "F" } }
+
+[[contract]]
+type = "invariance"
+name = "gender-blind-decision"
+output = "approved"
+transform = { kind = "swap_field", field = "gender", mapping = { F = "M", M = "F" } }
+
+# --- Stability: a 1% change in income should almost never flip a decision ---
+[[contract]]
+type = "invariance"
+name = "decision-stable-under-1pct-income-noise"
+output = "approved"
+variants = 3
+tolerance = 0.05
+transform = { kind = "jitter_field", field = "income", rel = 0.01 }

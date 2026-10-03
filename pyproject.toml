@@ -1,0 +1,91 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "assay"
+dynamic = ["version"]
+description = "Statistically rigorous behavioural contracts for AI and ML systems: metamorphic, fairness, safety and regression tests with three-valued verdicts."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "DroDigital" }]
+keywords = [
+    "ai", "llm", "machine-learning", "testing", "evaluation", "metamorphic-testing",
+    "fairness", "guardrails", "mlops", "quality-assurance",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+    "ruff==0.16.10",
+    "mypy==2.4.0",
+    "build>=1.2",
+]
+
+[project.scripts]
+assay = "assay.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/DroDigital/1"
+Issues = "https://github.com/DroDigital/1/issues"
+
+[tool.hatch.version]
+path = "src/assay/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/assay"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/assay", "tests", "examples", "docs", "README.md", "LICENSE", "CHANGELOG.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "examples"]
+addopts = "-ra --strict-markers"
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["assay"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "PIE", "PT"]
+
+[tool.ruff.lint.per-file-ignores]
+# Compound assertions read well in tests, and long literals/fixtures are fine there.
+"tests/*" = ["B011", "PT018", "E501"]
+"examples/*" = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src/assay"]
+warn_unreachable = true
