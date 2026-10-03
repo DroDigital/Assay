@@ -230,7 +230,8 @@ gender swaps, injection suffixes, tabular set/shift/scale/jitter/swap/drop, chai
 * **Regression gate:** store `baseline.json` from `main`, then
   `assay diff baseline.json current.json` fails the build when a verdict gets worse **or** a
   violation rate rises beyond what chance explains.
-* **Sensitive data:** `--redact` replaces inputs and outputs in counterexamples with placeholders.
+* **Sensitive data:** `--redact` replaces inputs, outputs and any reason that could quote them with
+  placeholders; redirects are never followed, so API tokens cannot be forwarded to another host.
 
 This repository's own workflow dogfoods all of it, including a job that proves the regressed demo
 models are still *caught*.
@@ -253,7 +254,8 @@ Design decisions, trade-offs and known limits are written down in
 * **A bug in your own transform or check aborts the run** instead of being scored against the model.
 * **Reports are injection-safe**: model output is escaped, so it cannot spoof verdict lines or
   inject terminal escape sequences; JUnit output strips characters XML cannot carry.
-* **Secrets never reach the report**: PII and credential detectors print masked excerpts.
+* **Leaked secrets and PII never reach the report**: `no_pii` and `no_secrets` withhold the offending
+  output and show only a masked excerpt (kind, two characters, length).
 
 ## Quality
 
